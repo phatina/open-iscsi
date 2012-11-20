@@ -74,11 +74,6 @@ the cache sync command will fail.
 - iscsiadm's -P 3 option will not print out scsi devices.
 - iscsid will not automatically online devices.
 
-You need to enable "Cryptographic API" under "Cryptographic options" in the
-kernel config. And you must enable "CRC32c CRC algorithm" even if
-you do not use header or data digests. They are the kernel options,
-CONFIG_CRYPTO and CONFIG_CRYPTO_CRC32C, respectively.
-
 The userspace components: iscsid, iscsiadm and iscsistart require the
 open-isns library which can be found here:
 
@@ -1132,7 +1127,7 @@ Red Hat or Fedora:
 -----------------
 To start open-iscsi in Red Hat/Fedora you can do:
 
-	service open-iscsi start
+	service iscsi start
 
 To get open-iscsi to automatically start at run time you may have to
 run:
@@ -1340,6 +1335,8 @@ iscsid will only perform rediscovery when it gets a SCN from the server.
 #   linux-isns (SLES's iSNS server) where it sometimes does not send SCN
 #   events in the proper format, so they may not get handled.
 
+To set the startup value, so that nodes are not logged into automatically
+use the value "manual".
 
 Example:
 --------

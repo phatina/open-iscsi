@@ -512,9 +512,13 @@ idbm_recinfo_node(node_rec_t *r, recinfo_t *ri)
 				 IDBM_SHOW, "None", "CRC32C", "CRC32C,None",
 				 "None,CRC32C", num, 1);
 		sprintf(key, CONN_DATA_DIGEST, i);
+
+#if 0
+We do not support data digests
 		__recinfo_int_o4(key, ri, r, conn[i].iscsi.DataDigest, IDBM_SHOW,
 				 "None", "CRC32C", "CRC32C,None",
 				 "None,CRC32C", num, 1);
+#endif
 		sprintf(key, CONN_IFMARKER, i);
 		__recinfo_int_o2(key, ri, r, conn[i].iscsi.IFMarker, IDBM_SHOW,
 				"No", "Yes", num, 1);
