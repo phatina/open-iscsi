@@ -996,6 +996,7 @@ int iface_setup_from_boot_context(struct iface_rec *iface,
 {
 	struct iscsi_transport *t = NULL;
 	uint32_t hostno;
+	int rc;
 
 	if (strlen(context->initiatorname))
 		strlcpy(iface->iname, context->initiatorname,
@@ -1009,10 +1010,7 @@ int iface_setup_from_boot_context(struct iface_rec *iface,
 			return 0;
 		}
 	} else if (strlen(context->iface)) {
-/* this ifdef is only temp until distros and firmwares are updated */
-#ifdef OFFLOAD_BOOT_SUPPORTED
 		char transport_name[ISCSI_TRANSPORT_NAME_MAXLEN];
-		int rc;
 
 		memset(transport_name, 0, ISCSI_TRANSPORT_NAME_MAXLEN);
 		/* make sure offload driver is loaded */
@@ -1038,9 +1036,6 @@ int iface_setup_from_boot_context(struct iface_rec *iface,
 		}
 
 		strlcpy(iface->netdev, context->iface, sizeof(iface->netdev));
-#else
-		return 0;
-#endif
 	} else
 		return 0;
 
