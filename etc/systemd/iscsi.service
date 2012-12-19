@@ -1,0 +1,19 @@
+[Unit]
+Description=Login and scanning of iSCSI devices
+Documentation=man:iscsid(8) man:iscsiadm(8)
+DefaultDependencies=no
+Conflicts=shutdown.target
+After=systemd-remount-fs.service network.target iscsid.service iscsiuio.service
+Before=remote-fs-pre.target
+ConditionPathExists=/etc/iscsi/initiatorname.iscsi
+
+[Service]
+Type=oneshot
+RemainAfterExit=true
+ExecStart=/usr/libexec/iscsi_mark_root_nodes
+ExecStart=/sbin/iscsiadm -m node --loginall=automatic
+ExecStop=/bin/sync
+ExecStop=/sbin/iscsiadm -m node --logoutall=automatic
+
+[Install]
+WantedBy=sysinit.target
