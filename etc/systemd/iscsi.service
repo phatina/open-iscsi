@@ -5,7 +5,7 @@ DefaultDependencies=no
 Conflicts=shutdown.target
 After=systemd-remount-fs.service network.target iscsid.service iscsiuio.service
 Before=remote-fs-pre.target
-ConditionPathExists=/etc/iscsi/initiatorname.iscsi
+ConditionDirectoryNotEmpty=/var/lib/iscsi/nodes
 
 [Service]
 Type=oneshot
