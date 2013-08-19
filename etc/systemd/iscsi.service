@@ -10,10 +10,11 @@ ConditionPathExists=/etc/iscsi/initiatorname.iscsi
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=/usr/libexec/iscsi_mark_root_nodes
+ExecStart=/usr/libexec/iscsi-mark-root-nodes
 ExecStart=/sbin/iscsiadm -m node --loginall=automatic
 ExecStop=/bin/sync
 ExecStop=/sbin/iscsiadm -m node --logoutall=automatic
+ExecReload=/sbin/iscsiadm -m node --loginall=automatic
 
 [Install]
 WantedBy=sysinit.target

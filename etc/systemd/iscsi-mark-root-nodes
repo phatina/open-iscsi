@@ -1,0 +1,13 @@
+#!/bin/bash
+
+ISCSIADM=/sbin/iscsiadm
+
+$ISCSIADM -m session >/dev/null 2>&1 || exit 0
+
+$ISCSIADM -m session | while read t num i target; do
+  ip=${i%:*}
+  $ISCSIADM -m node -p $ip -T $target -o update -n node.startup -v onboot
+done
+
+systemctl start iscsid.service
+
