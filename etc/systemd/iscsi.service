@@ -5,17 +5,17 @@ DefaultDependencies=no
 Conflicts=shutdown.target
 After=systemd-remount-fs.service network.target iscsid.service iscsiuio.service
 Before=remote-fs-pre.target
+Wants=remote-fs-pre.target
 ConditionDirectoryNotEmpty=|/var/lib/iscsi/nodes
 ConditionDirectoryNotEmpty=|/sys/class/iscsi_session
 
 [Service]
 Type=oneshot
 RemainAfterExit=true
-ExecStart=/usr/libexec/iscsi-mark-root-nodes
-SuccessExitStatus=21
-ExecStart=/sbin/iscsiadm -m node --loginall=automatic
-ExecStop=/sbin/iscsiadm -m node --logoutall=automatic
-ExecReload=/sbin/iscsiadm -m node --loginall=automatic
+ExecStart=-/usr/libexec/iscsi-mark-root-nodes
+ExecStart=-/sbin/iscsiadm -m node --loginall=automatic
+ExecStop=-/sbin/iscsiadm -m node --logoutall=automatic
+ExecReload=-/sbin/iscsiadm -m node --loginall=automatic
 
 [Install]
 WantedBy=sysinit.target
