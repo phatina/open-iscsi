@@ -166,4 +166,6 @@ struct iscsi_ipc {
 			 char *host_stats);
 };
 
+struct iscsi_ipc *ipc;
+
 #endif /* ISCSI_IPC_H */

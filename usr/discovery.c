@@ -36,6 +36,7 @@
 #include "types.h"
 #include "iscsi_proto.h"
 #include "initiator.h"
+#include "config.h"
 #include "log.h"
 #include "idbm.h"
 #include "iscsi_settings.h"
@@ -49,10 +50,12 @@
 #include "iface.h"
 #include "iscsi_timer.h"
 #include "iscsi_err.h"
+#ifdef ISNS_ENABLE
 /* libisns includes */
 #include <libisns/isns.h>
 #include <libisns/paths.h>
 #include <libisns/message.h>
+#endif
 
 #ifdef SLP_ENABLE
 #include "iscsi-slp-discovery.h"
@@ -98,6 +101,7 @@ static int request_initiator_name(void)
 	return 0;
 }
 
+#ifdef ISNS_ENABLE
 void discovery_isns_free_servername(void)
 {
 	if (isns_config.ic_server_name)
@@ -377,6 +381,7 @@ retry:
 	discovery_isns_free_servername();
 	return rc;
 }
+#endif
 
 int discovery_fw(void *data, struct iface_rec *iface,
 		 struct list_head *rec_list)
