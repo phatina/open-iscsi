@@ -364,8 +364,13 @@ static PyObject *PyIscsiNode_str(PyObject *self)
 static PyObject *PyIscsiNode_login(PyObject *self)
 {
 	PyIscsiNode *node = (PyIscsiNode *)self;
+	int ret;
 
-	if (libiscsi_node_login(context, &node->node)) {
+	Py_BEGIN_ALLOW_THREADS
+	ret = libiscsi_node_login(context, &node->node);
+	Py_END_ALLOW_THREADS
+
+	if (ret) {
 		PyErr_SetString(PyExc_IOError,
 				libiscsi_get_error_string(context));
 		return NULL;
@@ -551,6 +556,7 @@ static PyObject *pylibiscsi_discover_sendtargets(PyObject *self,
 	const struct libiscsi_auth_info *authinfo = NULL;
 	struct libiscsi_node *found_nodes;
 	PyObject* found_node_list;
+	int ret;
 
 	if (!PyArg_ParseTupleAndKeywords(args, kwds, "s|iO",
 					kwlist, &address, &port,
@@ -570,8 +576,12 @@ static PyObject *pylibiscsi_discover_sendtargets(PyObject *self,
 		}
 	}
 
-	if (libiscsi_discover_sendtargets(context, address, port, authinfo,
-					  &nr_found, &found_nodes)) {
+	Py_BEGIN_ALLOW_THREADS
+	ret = libiscsi_discover_sendtargets(context, address, port, authinfo,
+					    &nr_found, &found_nodes);
+	Py_END_ALLOW_THREADS
+
+	if (ret) {
 		PyErr_SetString(PyExc_IOError,
 				libiscsi_get_error_string(context));
 		return NULL;
