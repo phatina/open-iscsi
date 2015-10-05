@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2006 Mike Christie
  * Copyright (C) 2006 Red Hat, Inc. All rights reserved.
+ * Copyright (C) 2015      Peter Hatina <phatina@redhat.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -1143,6 +1144,11 @@ int iscsi_sysfs_for_each_host(void *data, int *nr_found,
 free_info:
 	free(info);
 	return rc;
+}
+
+const char *iscsi_sysfs_get_session_path(void)
+{
+	return ISCSI_SESSION_DIR;
 }
 
 int iscsi_sysfs_for_each_iface_on_host(void *data, uint32_t host_no,

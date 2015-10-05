@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2008-2009 Red Hat, Inc. All rights reserved.
  * Copyright (C) 2008-2009 Hans de Goede <hdegoede@redhat.com>
+ * Copyright (C) 2015      Peter Hatina <phatina@redhat.com>
  * maintained by open-iscsi@googlegroups.com
  *
  * This program is free software; you can redistribute it and/or modify
@@ -467,6 +468,130 @@ int libiscsi_node_logout(struct libiscsi_context *context,
 	}
 leave:
 	return rc;
+}
+
+struct libiscsi_session_array {
+	int cnt;
+	int size;
+	struct libiscsi_session_info *data;
+};
+
+static void libiscsi_session_array_init(struct libiscsi_session_array *arr)
+{
+	arr->cnt = 0;
+	arr->size = 0;
+	arr->data = NULL;
+}
+
+static int libiscsi_session_array_grow(struct libiscsi_session_array *arr)
+{
+	if (arr->size == 0)
+		arr->size = 4;
+	else
+		arr->size *= 2;
+
+	arr->data = (struct libiscsi_session_info *) realloc(
+		arr->data,
+		arr->size * sizeof(struct libiscsi_session_info));
+
+	return arr->data ? 0 : 1;
+}
+
+static int libiscsi_session_array_grow_ondemand(struct libiscsi_session_array *arr)
+{
+	if (arr->size == arr->cnt)
+		return libiscsi_session_array_grow(arr);
+	return 0;
+}
+
+static int libiscsi_session_array_resize_precize(struct libiscsi_session_array *arr)
+{
+	arr->data = (struct libiscsi_session_info *) realloc(
+		arr->data,
+		arr->cnt * sizeof(struct libiscsi_session_info));
+	arr->size = arr->cnt;
+
+	return arr->data ? 0 : 1;
+}
+
+static void copy_session_info_to_libiscsi_session_info(
+	struct libiscsi_session_info *info,
+	struct session_info *s_info)
+{
+	/* Copy session info to public struct. */
+	info->sid = s_info->sid;
+	/* Timeouts */
+	memcpy(&info->tmo, &s_info->tmo, sizeof(struct libiscsi_session_timeout));
+	/* CHAP authentication information */
+	memcpy(&info->chap, &s_info->chap, sizeof(struct libiscsi_chap_auth_info));
+	/* Target information */
+	strncpy(info->targetname, s_info->targetname, LIBISCSI_VALUE_MAXLEN);
+	strncpy(info->address, s_info->address, NI_MAXHOST);
+	strncpy(info->persistent_address, s_info->persistent_address, NI_MAXHOST);
+	info->tpgt = s_info->tpgt;
+	info->persistent_port = s_info->persistent_port;
+}
+
+static int get_sessions_helper(void *data, struct session_info *s_info)
+{
+	struct libiscsi_session_array *arr = (struct libiscsi_session_array *) data;
+
+	if (libiscsi_session_array_grow_ondemand(arr) != 0)
+		return 1;
+
+	copy_session_info_to_libiscsi_session_info(&arr->data[arr->cnt++], s_info);
+
+	return 0;
+}
+
+int libiscsi_get_session_infos(struct libiscsi_context *context,
+	struct libiscsi_session_info **infos,
+	int *nr_sessions)
+{
+	int rc = 0;
+	int nr_found = 0;
+	struct libiscsi_session_array arr;
+
+	if (!context || !infos || !nr_sessions)
+		return 1;
+
+	libiscsi_session_array_init(&arr);
+
+	rc = iscsi_sysfs_for_each_session((void *) &arr, &nr_found,
+		get_sessions_helper, 0);
+	if (rc != 0 || nr_found == 0) {
+		strcpy(context->error_str, "No matching session");
+		return ENODEV;
+	}
+
+	if (libiscsi_session_array_resize_precize(&arr) != 0) {
+		strcpy(context->error_str, "Can't allocate memory for session infos");
+		return ENOMEM;
+	}
+
+	*infos = arr.data;
+	*nr_sessions = nr_found;
+
+	return 0;
+}
+
+int libiscsi_get_session_info_by_id(struct libiscsi_context *context,
+	struct libiscsi_session_info *info,
+	const char *session)
+{
+	struct session_info s_info;
+
+	if (!context || !info || !session)
+		return 1;
+
+	if (iscsi_sysfs_get_sessioninfo_by_id(&s_info, (char*) session) != 0) {
+		strcpy(context->error_str, "No matching session");
+		return ENODEV;
+	}
+
+	copy_session_info_to_libiscsi_session_info(info, &s_info);
+
+	return 0;
 }
 
 int libiscsi_node_set_parameter(struct libiscsi_context *context,

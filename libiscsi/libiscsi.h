@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2008-2009 Red Hat, Inc. All rights reserved.
  * Copyright (C) 2008-2009 Hans de Goede <hdegoede@redhat.com>
+ * Copyright (C) 2015      Peter Hatina <phatina@redhat.com>
  * maintained by open-iscsi@googlegroups.com
  *
  * This program is free software; you can redistribute it and/or modify
@@ -56,6 +57,17 @@ enum libiscsi_auth_t {
  */
 struct libiscsi_context;
 
+/** \brief iSCSI session timeouts
+ *
+ * Struct holding session timeouts.
+ */
+struct libiscsi_session_timeout {
+    int abort_tmo;
+    int lu_reset_tmo;
+    int recovery_tmo;
+    int tgt_reset_tmo;
+};
+
 /** \brief iSCSI node record
  *
  * Struct holding data uniquely identifying an iSCSI node.
@@ -82,6 +94,24 @@ struct libiscsi_chap_auth_info {
     char password[LIBISCSI_VALUE_MAXLEN]         /** Password */;
     char reverse_username[LIBISCSI_VALUE_MAXLEN] /** Reverse Username */;
     char reverse_password[LIBISCSI_VALUE_MAXLEN] /** Reverse Password */;
+};
+
+/** \brief iSCSI session
+ *
+ * Struct hoding iSCSI session information.
+ */
+struct libiscsi_session_info {
+    int sid;
+
+    struct libiscsi_session_timeout tmo;
+    struct libiscsi_chap_auth_info chap;
+
+    char targetname[LIBISCSI_VALUE_MAXLEN];
+    int tpgt;
+    char address[NI_MAXHOST];
+    int port;
+    char persistent_address[NI_MAXHOST];
+    int persistent_port;
 };
 
 /** \brief generic libiscsi authentication information struct
@@ -247,6 +277,32 @@ PUBLIC int libiscsi_node_login(struct libiscsi_context *context,
  */
 PUBLIC int libiscsi_node_logout(struct libiscsi_context *context,
     const struct libiscsi_node *node);
+
+/** \brief Get an array of iSCSI sessions.
+ *
+ * Get the array containing iSCSI sessions' information.
+ *
+ * \param context       libiscsi context to operate on.
+ * \param infos         Array of iSCSI sessions' information.
+ *                      Release with free().
+ * \param nr_sessions   The number of elements in \e infos.
+ * \return              0 on success, otherwise a standard error code
+ *                      (from errno.h).
+ */
+PUBLIC int libiscsi_get_session_infos(struct libiscsi_context *context,
+    struct libiscsi_session_info **infos, int *nr_sessions);
+
+/** \brief Get session information by session ID.
+ *
+ * \param context       libiscsi context to operate on.
+ * \param info          iSCSI session information.
+ * \param session       Session name.
+ * \return              0 on success, otherwise a standard error code
+ *                      (from errno.h)
+ */
+PUBLIC int libiscsi_get_session_info_by_id(struct libiscsi_context *context,
+    struct libiscsi_session_info *info,
+    const char *session);
 
 /** \brief Set an iSCSI parameter for the given node
  *

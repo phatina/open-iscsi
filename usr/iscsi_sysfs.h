@@ -3,6 +3,7 @@
  *
  * Copyright (C) 2006 Mike Christie
  * Copyright (C) 2006 Red Hat, Inc. All rights reserved.
+ * Copyright (C) 2015      Peter Hatina <phatina@redhat.com>
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published
@@ -47,6 +48,7 @@ typedef int (iscsi_sysfs_flashnode_op_fn)(void *, struct flashnode_rec *,
 					  uint32_t, uint32_t);
 typedef int (iscsi_sysfs_iface_op_fn)(void *, struct iface_rec *);
 
+extern const char *iscsi_sysfs_get_session_path(void);
 extern int iscsi_sysfs_for_each_iface_on_host(void *data, uint32_t host_no,
 					      int *nr_found,
 					      iscsi_sysfs_iface_op_fn *fn);
