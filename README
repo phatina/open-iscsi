@@ -22,17 +22,17 @@ Contents
 1. In This Release
 ==================
 
-This file describes the Linux* Open-iSCSI Initiator. The software was
-tested on AMD Opteron (TM) and Intel Xeon (TM). 
+This is a fork of Open-iSCSI Initiator repository.  It contains patches that
+live in Fedora's dist git and other changes (regarding libiscsi).
 
 The latest development release is available at:
-http://www.open-iscsi.org
+https://github.com/phatina/open-iscsi
 
 For questions, comments, contributions send e-mail to:
-open-iscsi@googlegroups.com 
+Peter Hatina <phatina@redhat.com>
 
     1.1. Features
-    
+
     - highly optimized and very small-footprint data path;
     - persistent configuration database;
     - SendTargets discovery;
