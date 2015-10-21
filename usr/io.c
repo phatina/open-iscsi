@@ -2,6 +2,7 @@
  * iSCSI I/O Library
  *
  * Copyright (C) 2002 Cisco Systems, Inc.
+ * Copyright (C) 2015 Peter Hatina <phatina@redhat.com>
  * maintained by linux-iscsi-devel@lists.sourceforge.net
  *
  * This program is free software; you can redistribute it and/or modify
@@ -54,13 +55,10 @@ do { \
 	log_error("Connection to Discovery Address %s failed", conn->host); \
 } while (0)
 
-static int timedout;
-
-static void
-sigalarm_handler(int unused)
-{
-	timedout = 1;
-}
+enum select_action {
+	SELECT_READ,
+	SELECT_WRITE
+};
 
 static void
 set_non_blocking(int fd)
@@ -328,6 +326,41 @@ iscsi_io_tcp_connect(iscsi_conn_t *conn, int non_blocking)
 	return rc;
 }
 
+/* We use select(2), because it updates the timeout structure; so the code
+ * is as similar as possible to the one with alarm(2) design.
+ */
+static int
+iscsi_io_tcp_select(iscsi_conn_t *conn, enum select_action action, int *timeout_ms)
+{
+	int rval = 0;
+	fd_set fds;
+	struct timeval tv;
+
+	tv.tv_sec = *timeout_ms / 1000;
+	tv.tv_usec = *timeout_ms % 1000;
+
+	FD_ZERO(&fds);
+	FD_SET(conn->socket_fd, &fds);
+
+	switch (action) {
+	case SELECT_READ:
+		rval = select(conn->socket_fd + 1, &fds, NULL, NULL, &tv);
+		break;
+
+	case SELECT_WRITE:
+		rval = select(conn->socket_fd + 1, NULL, &fds, NULL, &tv);
+		break;
+	}
+
+	if (rval > 0) {
+		/* We didn't timeout or end with an error; let's update the
+		 * timeout_ms accordingly. */
+		*timeout_ms = tv.tv_sec * 1000 + tv.tv_usec / 1000;
+	}
+
+	return rval;
+}
+
 int
 iscsi_io_tcp_poll(iscsi_conn_t *conn, int timeout_ms)
 {
@@ -403,35 +436,28 @@ int
 iscsi_io_connect(iscsi_conn_t *conn)
 {
 	int rc, ret;
-	struct sigaction action;
-	struct sigaction old;
+	int timeout_ms = conn->login_timeout * 1000;
 
-	/* set a timeout, since the socket calls may take a long time to
-	 * timeout on their own
-	 */
-	memset(&action, 0, sizeof (struct sigaction));
-	memset(&old, 0, sizeof (struct sigaction));
-	action.sa_sigaction = NULL;
-	action.sa_flags = 0;
-	action.sa_handler = sigalarm_handler;
-	sigaction(SIGALRM, &action, &old);
-	timedout = 0;
-	alarm(conn->login_timeout);
+	/* Perform a NON-blocking TCP connection for timeout measurement */
+	rc = iscsi_io_tcp_connect(conn, 1);
+	if (rc < 0 && errno != EINPROGRESS) {
+		log_error("cannot make connection to %s: %s",
+			conn->host, strerror(errno));
+		close(conn->socket_fd);
+		ret = 0;
+		goto done;
+	}
 
-	/* perform blocking TCP connect operation when no async request
-	 * associated. SendTargets Discovery know to work in such a mode.
-	 */
-	rc = iscsi_io_tcp_connect(conn, 0);
-	if (timedout) {
+	rc = iscsi_io_tcp_select(conn, SELECT_WRITE, &timeout_ms);
+	if (rc == 0) {
+		/* Timedout */
 		log_error("connect to %s timed out", conn->host);
-			  
 		log_debug(1, "socket %d connect timed out", conn->socket_fd);
 		ret = 0;
 		goto done;
 	} else if (rc < 0) {
-		log_error("cannot make connection to %s: %s",
-			  conn->host, strerror(errno));
-		close(conn->socket_fd);
+		/* Select error */
+		log_error("can't multiplex on socket %d", conn->socket_fd);
 		ret = 0;
 		goto done;
 	} else if (log_level > 0) {
@@ -460,8 +486,6 @@ iscsi_io_connect(iscsi_conn_t *conn)
 	ret = 1;
 
 done:
-	alarm(0);
-	sigaction(SIGALRM, &old, NULL);
 	return ret;
 }
 
@@ -491,6 +515,8 @@ iscsi_io_send_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 	       int hdr_digest, char *data, int data_digest, int timeout)
 {
 	int rc, ret = 0;
+	int rc_select;
+	int timeout_ms = timeout * 1000;
 	char *header = (char *) hdr;
 	char *end;
 	char pad[4];
@@ -498,23 +524,7 @@ iscsi_io_send_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 	int pad_bytes;
 	int pdu_length = sizeof (*hdr) + hdr->hlength + ntoh24(hdr->dlength);
 	int remaining;
-	struct sigaction action;
-	struct sigaction old;
 	iscsi_session_t *session = conn->session;
-
-	/* set a timeout, since the socket calls may take a long time
-	 * to timeout on their own
-	 */
-	if (!session->use_ipc) {
-		memset(&action, 0, sizeof (struct sigaction));
-		memset(&old, 0, sizeof (struct sigaction));
-		action.sa_sigaction = NULL;
-		action.sa_flags = 0;
-		action.sa_handler = sigalarm_handler;
-		sigaction(SIGALRM, &action, &old);
-		timedout = 0;
-		alarm(timeout);
-	}
 
 	memset(&pad, 0, sizeof (pad));
 	memset(&vec, 0, sizeof (vec));
@@ -577,11 +587,17 @@ iscsi_io_send_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 		vec[0].iov_base = header;
 		vec[0].iov_len = end - header;
 
-		if (!session->use_ipc)
-			rc = writev(conn->socket_fd, vec, 1);
-		else
+		if (!session->use_ipc) {
+			rc_select = iscsi_io_tcp_select(conn, SELECT_WRITE, &timeout_ms);
+			if (rc_select > 0) {
+				/* No, we didn't timeout */
+				rc = writev(conn->socket_fd, vec, 1);
+			}
+		} else {
 			rc = ipc->writev(0, vec, 1);
-		if (timedout) {
+		}
+		if (rc_select == 0) {
+			/* Timeout */
 			log_error("socket %d write timed out",
 			       conn->socket_fd);
 			ret = 0;
@@ -605,11 +621,17 @@ iscsi_io_send_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 		vec[1].iov_base = (void *) &pad;
 		vec[1].iov_len = pad_bytes;
 
-		if (!session->use_ipc)
-			rc = writev(conn->socket_fd, vec, 2);
-		else
+		if (!session->use_ipc) {
+			rc_select = iscsi_io_tcp_select(conn, SELECT_WRITE, &timeout_ms);
+			if (rc_select > 0) {
+				/* No, we didn't timeout */
+				rc = writev(conn->socket_fd, vec, 2);
+			}
+		} else {
 			rc = ipc->writev(0, vec, 2);
-		if (timedout) {
+		}
+		if (rc_select == 0) {
+			/* Timeout */
 			log_error("socket %d write timed out",
 				  conn->socket_fd);
 			ret = 0;
@@ -639,12 +661,7 @@ iscsi_io_send_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 
 	ret = 1;
 
-      done:
-	if (!session->use_ipc) {
-		alarm(0);
-		sigaction(SIGALRM, &old, NULL);
-		timedout = 0;
-	}
+done:
 	return ret;
 }
 
@@ -653,6 +670,8 @@ iscsi_io_recv_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 	       int hdr_digest, char *data, int max_data_length, int data_digest,
 	       int timeout)
 {
+	int rc_select;
+	int timeout_ms = timeout * 1000;
 	uint32_t h_bytes = 0;
 	uint32_t ahs_bytes = 0;
 	uint32_t d_bytes = 0;
@@ -663,25 +682,11 @@ iscsi_io_recv_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 	int failed = 0;
 	char *header = (char *) hdr;
 	char *end = data + max_data_length;
-	struct sigaction action;
-	struct sigaction old;
 	iscsi_session_t *session = conn->session;
 
 	memset(data, 0, max_data_length);
 
-	/* set a timeout, since the socket calls may take a long
-	 * time to timeout on their own
-	 */
-	if (!session->use_ipc) {
-		memset(&action, 0, sizeof (struct sigaction));
-		memset(&old, 0, sizeof (struct sigaction));
-		action.sa_sigaction = NULL;
-		action.sa_flags = 0;
-		action.sa_handler = sigalarm_handler;
-		sigaction(SIGALRM, &action, &old);
-		timedout = 0;
-		alarm(timeout);
-	} else {
+	if (session->use_ipc) {
 		failed = ipc->recv_pdu_begin(conn);
 		if (failed == -EAGAIN)
 			return -EAGAIN;
@@ -693,12 +698,19 @@ iscsi_io_recv_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 
 	/* read a response header */
 	do {
-		if (!session->use_ipc)
-			rlen = read(conn->socket_fd, header,
+		if (!session->use_ipc) {
+			/* select only if we exhausted the read buffer */
+			rc_select = iscsi_io_tcp_select(conn, SELECT_READ, &timeout_ms);
+			if (rc_select > 0) {
+				/* No, we didn't timeout */
+				rlen = read(conn->socket_fd, header,
 					sizeof (*hdr) - h_bytes);
-		else
+			}
+		} else {
 			rlen = ipc->read(header, sizeof (*hdr) - h_bytes);
-		if (timedout) {
+		}
+		if (rc_select == 0) {
+			/* Timeout */
 			log_error("socket %d header read timed out",
 				  conn->socket_fd);
 			failed = 1;
@@ -750,12 +762,18 @@ iscsi_io_recv_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 	/* read the rest into our buffer */
 	d_bytes = 0;
 	while (d_bytes < dlength) {
-		if (!session->use_ipc)
-			rlen = read(conn->socket_fd, data + d_bytes,
+		if (!session->use_ipc) {
+			rc_select = iscsi_io_tcp_select(conn, SELECT_READ, &timeout_ms);
+			if (rc_select > 0) {
+				/* No, we didn't timeout */
+				rlen = read(conn->socket_fd, data + d_bytes,
 					dlength - d_bytes);
-		else
+			}
+		} else {
 			rlen = ipc->read(data + d_bytes, dlength - d_bytes);
-		if (timedout) {
+		}
+		if (rc_select == 0) {
+			/* Timeout */
 			log_error("socket %d data read timed out",
 				  conn->socket_fd);
 			failed = 1;
@@ -782,13 +800,17 @@ iscsi_io_recv_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 		char bytes[ISCSI_PAD_LEN];
 
 		while (pad_bytes > 0) {
-			rlen = read(conn->socket_fd, &bytes, pad_bytes);
-			if (timedout) {
+			rc_select = iscsi_io_tcp_select(conn, SELECT_READ, &timeout_ms);
+			if (rc_select > 0) {
+				/* No, we didn't timeout */
+				rlen = read(conn->socket_fd, &bytes, pad_bytes);
+			} else if (rc_select == 0) {
 				log_error("socket %d pad read timed out",
 					  conn->socket_fd);
 				failed = 1;
 				goto done;
-			} else if (rlen == 0) {
+			}
+			if (rlen == 0) {
 				LOG_CONN_CLOSED(conn);
 				failed = 1;
 				goto done;
@@ -833,20 +855,15 @@ iscsi_io_recv_pdu(iscsi_conn_t *conn, struct iscsi_hdr *hdr,
 	}
 
 done:
-	if (!session->use_ipc) {
-		alarm(0);
-		sigaction(SIGALRM, &old, NULL);
-	} else {
+	if (session->use_ipc) {
 		/* finalyze receive transaction */
 		if (ipc->recv_pdu_end(conn)) {
 			failed = 1;
 		}
 	}
 
-	if (timedout || failed) {
-		timedout = 0;
+	if (timeout_ms == 0 || failed)
 		return -EIO;
-	}
 
 	return h_bytes + ahs_bytes + d_bytes;
 }
