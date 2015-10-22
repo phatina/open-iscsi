@@ -10,12 +10,14 @@ prefix = /usr
 exec_prefix = /
 sbindir = $(exec_prefix)/sbin
 bindir = $(exec_prefix)/bin
+libdir = $(prefix)/lib
 mandir = $(prefix)/share/man
 etcdir = /etc
 initddir = $(etcdir)/init.d
 
 MANPAGES = doc/iscsid.8 doc/iscsiadm.8 doc/iscsi_discovery.8 iscsiuio/docs/iscsiuio.8
 PROGRAMS = usr/iscsid usr/iscsiadm utils/iscsi_discovery utils/iscsi-iname iscsiuio/src/unix/iscsiuio
+LIBRARIES = libiscsi/libiscsi.so.0 libiscsi/libiscsi.so
 INSTALL = install
 ETCFILES = etc/iscsid.conf
 IFACEFILES = etc/iface.example
@@ -51,6 +53,7 @@ user: iscsiuio/Makefile
 	@echo "Built management application:        usr/iscsiadm"
 	@echo "Built boot tool:                     usr/iscsistart"
 	@echo "Built iscsiuio daemon:               iscsiuio/src/unix/iscsiuio"
+	@echo "Build libiscsi client library:       libiscsi/libiscsi.so.0"
 	@echo
 	@echo "Read README file for detailed information."
 
@@ -84,11 +87,11 @@ clean:
 # this is for safety
 # now -jXXX will still be safe
 # note that make may still execute the blocks in parallel
-.NOTPARALLEL: install_user install_programs install_initd \
+.NOTPARALLEL: install_user install_programs install_libs install_initd \
 	install_initd_suse install_initd_redhat install_initd_debian \
 	install_etc install_iface install_doc install_kernel install_iname
 
-install: install_programs install_doc install_etc \
+install: install_programs install_libs install_doc install_etc \
 	install_initd install_iname install_iface
 
 install_user: install_programs install_doc install_etc \
@@ -97,6 +100,10 @@ install_user: install_programs install_doc install_etc \
 install_programs:  $(PROGRAMS)
 	$(INSTALL) -d $(DESTDIR)$(sbindir)
 	$(INSTALL) -m 755 $^ $(DESTDIR)$(sbindir)
+
+install_libs:  $(LIBRARIES)
+	$(INSTALL) -d $(DESTDIR)$(libdir)
+	$(INSTALL) -m 755 $^ $(DESTDIR)$(libdir)
 
 # ugh, auto-detection is evil
 # Gentoo maintains their own init.d stuff
