@@ -165,8 +165,8 @@ PUBLIC void libiscsi_cleanup(struct libiscsi_context *context);
  *                               of found nodes will be returned through this
  *                               pointer if not NULL. The caller must free this
  *                               array using free().
- * \return                       0 on success, otherwise a standard error code
- *                               (from errno.h).
+ * \return                       0 on success, otherwise an error code
+ *                               (from iscsi_err.h).
  */
 PUBLIC int libiscsi_discover_sendtargets(struct libiscsi_context *context,
     const char *address, int port, const struct libiscsi_auth_info *auth_info,
@@ -191,22 +191,22 @@ PUBLIC int libiscsi_discover_sendtargets(struct libiscsi_context *context,
  *                               of found nodes will be returned through this
  *                               pointer if not NULL. The caller must free this
  *                               array using free().
- * \return                       0 on success, otherwise a standard error code
- *                               (from errno.h).
+ * \return                       0 on success, otherwise an error code
+ *                               (from iscsi_err.h).
  */
 PUBLIC int libiscsi_discover_firmware(struct libiscsi_context *context,
     int *nr_found, struct libiscsi_node **found_nodes);
 
 /** \brief Check validity of the given authentication info.
  *
- * This function checks the validity of the given authentication info. For 
+ * This function checks the validity of the given authentication info. For
  * example in case of CHAP, if the username and password are not empty.
  *
  * This function is mainly intended for use by language bindings.
  *
  * \param context                libiscsi context to operate on.
  * \param auth_info              Authentication information to check.
- * \return                       0 on success, otherwise EINVAL.
+ * \return                       0 on success, otherwise ISCSI_ERR_INVAL.
  */
 PUBLIC int libiscsi_verify_auth_info(struct libiscsi_context *context,
 	const struct libiscsi_auth_info *auth_info);
@@ -231,8 +231,8 @@ PUBLIC int libiscsi_verify_auth_info(struct libiscsi_context *context,
  * \param context                libiscsi context to operate on.
  * \param node                   iSCSI node to set auth information of
  * \param auth_info              Authentication information, or NULL.
- * \return                       0 on success, otherwise a standard error code
- *                               (from errno.h).
+ * \return                       0 on success, otherwise an error code
+ *                               (from iscsi_err.h).
  */
 PUBLIC int libiscsi_node_set_auth(struct libiscsi_context *context,
     const struct libiscsi_node *node,
@@ -247,8 +247,8 @@ PUBLIC int libiscsi_node_set_auth(struct libiscsi_context *context,
  * \param node                   iSCSI node to set auth information of
  * \param auth_info              Pointer to a libiscsi_auth_info struct where
  *                               the retreived information will be stored.
- * \return                       0 on success, otherwise a standard error code
- *                               (from errno.h).
+ * \return                       0 on success, otherwise an error code
+ *                               (from iscsi_err.h).
  */
 PUBLIC int libiscsi_node_get_auth(struct libiscsi_context *context,
     const struct libiscsi_node *node,
@@ -260,8 +260,8 @@ PUBLIC int libiscsi_node_get_auth(struct libiscsi_context *context,
  *
  * \param context       libiscsi context to operate on.
  * \param node          iSCSI node to login to.
- * \return              0 on success, otherwise a standard error code
- *                      (from errno.h).
+ * \return              0 on success, otherwise an error code
+ *                      (from iscsi_err.h).
  */
 PUBLIC int libiscsi_node_login(struct libiscsi_context *context,
     const struct libiscsi_node *node);
@@ -272,8 +272,8 @@ PUBLIC int libiscsi_node_login(struct libiscsi_context *context,
  *
  * \param context       libiscsi context to operate on.
  * \param node          iSCSI node to logout from.
- * \return              0 on success, otherwise a standard error code
- *                      (from errno.h).
+ * \return              0 on success, otherwise an error code
+ *                      (from iscsi_err.h).
  */
 PUBLIC int libiscsi_node_logout(struct libiscsi_context *context,
     const struct libiscsi_node *node);
@@ -286,8 +286,8 @@ PUBLIC int libiscsi_node_logout(struct libiscsi_context *context,
  * \param infos         Array of iSCSI sessions' information.
  *                      Release with free().
  * \param nr_sessions   The number of elements in \e infos.
- * \return              0 on success, otherwise a standard error code
- *                      (from errno.h).
+ * \return              0 on success, otherwise an error code
+ *                      (from iscsi_err.h).
  */
 PUBLIC int libiscsi_get_session_infos(struct libiscsi_context *context,
     struct libiscsi_session_info **infos, int *nr_sessions);
@@ -297,8 +297,8 @@ PUBLIC int libiscsi_get_session_infos(struct libiscsi_context *context,
  * \param context       libiscsi context to operate on.
  * \param info          iSCSI session information.
  * \param session       Session name.
- * \return              0 on success, otherwise a standard error code
- *                      (from errno.h)
+ * \return              0 on success, otherwise an error code
+ *                      (from iscsi_err.h)
  */
 PUBLIC int libiscsi_get_session_info_by_id(struct libiscsi_context *context,
     struct libiscsi_session_info *info,
@@ -312,8 +312,8 @@ PUBLIC int libiscsi_get_session_info_by_id(struct libiscsi_context *context,
  * \param node          iSCSI node to change a parameter from.
  * \param parameter     Name of the parameter to set.
  * \param value         Value to set the parameter too.
- * \return              0 on success, otherwise a standard error code
- *                      (from errno.h).
+ * \return              0 on success, otherwise an error code
+ *                      (from iscsi_err.h).
  */
 PUBLIC int libiscsi_node_set_parameter(struct libiscsi_context *context,
     const struct libiscsi_node *node,
@@ -328,8 +328,8 @@ PUBLIC int libiscsi_node_set_parameter(struct libiscsi_context *context,
  * \param parameter     Name of the parameter to get.
  * \param value         The retreived value is stored here, this buffer must be
  *                      atleast LIBISCSI_VALUE_MAXLEN bytes large.
- * \return              0 on success, otherwise a standard error code
- *                      (from errno.h).
+ * \return              0 on success, otherwise an error code
+ *                      (from iscsi_err.h).
  */
 PUBLIC int libiscsi_node_get_parameter(struct libiscsi_context *context,
     const struct libiscsi_node *node, const char *parameter, char *value);

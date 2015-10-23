@@ -176,7 +176,7 @@ int libiscsi_discover_sendtargets(struct libiscsi_context *context,
 		if (*found_nodes == NULL) {
 			snprintf(context->error_str,
 				 sizeof(context->error_str), strerror(ENOMEM));
-			rc = ENOMEM;
+			rc = ISCSI_ERR_NOMEM;
 			goto leave;
 		}
 		found = 0;
@@ -245,7 +245,7 @@ int libiscsi_discover_firmware(struct libiscsi_context *context,
 	/* allocate enough space for all the nodes */
 	new_nodes = calloc(node_count, sizeof *new_nodes);
 	if (new_nodes == NULL) {
-		rc = ENOMEM;
+		rc = ISCSI_ERR_NOMEM;
 		log_error("%s: %s.\n", __func__, strerror(ENOMEM));
 		goto leave;
 	}
@@ -291,25 +291,25 @@ int libiscsi_verify_auth_info(struct libiscsi_context *context,
 	case libiscsi_auth_chap:
 		if (!auth_info->chap.username[0]) {
 			strcpy(context->error_str, "Empty username");
-			return EINVAL;
+			return ISCSI_ERR_INVAL;
 		}
 		if (!auth_info->chap.password[0]) {
 			strcpy(context->error_str, "Empty password");
-			return EINVAL;
+			return ISCSI_ERR_INVAL;
 		}
 		if (auth_info->chap.reverse_username[0] &&
 		    !auth_info->chap.reverse_password[0]) {
 			strcpy(context->error_str, "Empty reverse password");
-		    	return EINVAL;
+			return ISCSI_ERR_INVAL;
 		}
 		break;
 	default:
 		sprintf(context->error_str,
 			"Invalid authentication method: %d",
 			(int)auth_info->method);
-		return EINVAL;
+		return ISCSI_ERR_INVAL;
 	}
-	return 0;
+	return ISCSI_SUCCESS;
 }
 
 int libiscsi_node_set_auth(struct libiscsi_context *context,
@@ -386,7 +386,7 @@ int libiscsi_node_get_auth(struct libiscsi_context *context,
 	} else {
 		snprintf(context->error_str, sizeof(context->error_str),
 			 "unknown authentication method: %s", value);
-		rc = EINVAL;
+		rc = ISCSI_ERR_INVAL;
 	}
 leave:
 	return rc;
@@ -403,18 +403,18 @@ static void node_to_rec(const struct libiscsi_node *node,
 	rec->conn[0].port = node->port;
 }
 
-int login_helper(void *data, node_rec_t *rec)
+static int login_helper(void *data, node_rec_t *rec)
 {
 	char *iface = (char*)data;
-	if (strcmp(iface, rec->iface.name))
+	if (strcmp(iface, rec->iface.name)) {
 		/* different iface, skip it */
-		return -1;
+		return ISCSI_ERR;
+        }
 
 	int rc = iscsid_req_by_rec(MGMT_IPC_SESSION_LOGIN, rec);
-	if (rc) {
+	if (rc)
 		iscsi_err_print_msg(rc);
-		rc = ENOTCONN;
-	}
+
 	return rc;
 }
 
@@ -428,7 +428,7 @@ int libiscsi_node_login(struct libiscsi_context *context,
 		(char *)node->address, node->port))
 	if (nr_found == 0) {
 		strcpy(context->error_str, "No such node");
-		rc = ENODEV;
+		rc = ISCSI_ERR_NO_OBJS_FOUND;
 	}
 leave:
 	return rc;
@@ -439,16 +439,15 @@ static int logout_helper(void *data, struct session_info *info)
 	int rc;
 	struct node_rec *rec = data;
 
-	if (!iscsi_match_session(rec, info))
+	if (!iscsi_match_session(rec, info)) {
 		/* Tell iscsi_sysfs_for_each_session this session was not a
 		   match so that it will not increase nr_found. */
-		return -1;
+		return ISCSI_ERR;
+        }
 
 	rc = iscsid_req_by_sid(MGMT_IPC_SESSION_LOGOUT, info->sid);
-	if (rc) {
+	if (rc)
 		iscsi_err_print_msg(rc);
-		rc = EIO;
-	}
 
 	return rc;
 }
@@ -463,7 +462,7 @@ int libiscsi_node_logout(struct libiscsi_context *context,
 	CHECK(iscsi_sysfs_for_each_session(&rec, &nr_found, logout_helper,0))
 	if (nr_found == 0) {
 		strcpy(context->error_str, "No matching session");
-		rc = ENODEV;
+		rc = ISCSI_ERR_NO_OBJS_FOUND;
 	}
 leave:
 	return rc;
@@ -500,7 +499,7 @@ static int libiscsi_session_array_grow_ondemand(struct libiscsi_session_array *a
 {
 	if (arr->size == arr->cnt)
 		return libiscsi_session_array_grow(arr);
-	return 0;
+	return ISCSI_SUCCESS;
 }
 
 static int libiscsi_session_array_resize_precize(struct libiscsi_session_array *arr)
@@ -510,7 +509,7 @@ static int libiscsi_session_array_resize_precize(struct libiscsi_session_array *
 		arr->cnt * sizeof(struct libiscsi_session_info));
 	arr->size = arr->cnt;
 
-	return arr->data ? 0 : 1;
+	return arr->data ? ISCSI_SUCCESS : ISCSI_ERR;
 }
 
 static void copy_session_info_to_libiscsi_session_info(
@@ -536,11 +535,11 @@ static int get_sessions_helper(void *data, struct session_info *s_info)
 	struct libiscsi_session_array *arr = (struct libiscsi_session_array *) data;
 
 	if (libiscsi_session_array_grow_ondemand(arr) != 0)
-		return 1;
+		return ISCSI_ERR_NOMEM;
 
 	copy_session_info_to_libiscsi_session_info(&arr->data[arr->cnt++], s_info);
 
-	return 0;
+	return ISCSI_SUCCESS;
 }
 
 int libiscsi_get_session_infos(struct libiscsi_context *context,
@@ -552,7 +551,7 @@ int libiscsi_get_session_infos(struct libiscsi_context *context,
 	struct libiscsi_session_array arr;
 
 	if (!context || !infos || !nr_sessions)
-		return 1;
+		return ISCSI_ERR_INVAL;
 
 	libiscsi_session_array_init(&arr);
 
@@ -560,18 +559,18 @@ int libiscsi_get_session_infos(struct libiscsi_context *context,
 		get_sessions_helper, 0);
 	if (rc != 0 || nr_found == 0) {
 		strcpy(context->error_str, "No matching session");
-		return ENODEV;
+		return ISCSI_ERR_NO_OBJS_FOUND;
 	}
 
 	if (libiscsi_session_array_resize_precize(&arr) != 0) {
 		strcpy(context->error_str, "Can't allocate memory for session infos");
-		return ENOMEM;
+		return ISCSI_ERR_NOMEM;
 	}
 
 	*infos = arr.data;
 	*nr_sessions = nr_found;
 
-	return 0;
+	return ISCSI_SUCCESS;
 }
 
 int libiscsi_get_session_info_by_id(struct libiscsi_context *context,
@@ -581,16 +580,16 @@ int libiscsi_get_session_info_by_id(struct libiscsi_context *context,
 	struct session_info s_info;
 
 	if (!context || !info || !session)
-		return 1;
+		return ISCSI_ERR_INVAL;
 
 	if (iscsi_sysfs_get_sessioninfo_by_id(&s_info, (char*) session) != 0) {
 		strcpy(context->error_str, "No matching session");
-		return ENODEV;
+		return ISCSI_ERR_NO_OBJS_FOUND;
 	}
 
 	copy_session_info_to_libiscsi_session_info(info, &s_info);
 
-	return 0;
+	return ISCSI_SUCCESS;
 }
 
 int libiscsi_node_set_parameter(struct libiscsi_context *context,
@@ -604,7 +603,7 @@ int libiscsi_node_set_parameter(struct libiscsi_context *context,
 	INIT_LIST_HEAD(&params);
 	param = idbm_alloc_user_param(parameter, value);
 	if (!param) {
-		rc = ENOMEM;
+		rc = ISCSI_ERR_NOMEM;
 		goto leave;
 	}
 	list_add_tail(&params, &param->list);
@@ -614,7 +613,7 @@ int libiscsi_node_set_parameter(struct libiscsi_context *context,
 		(char *)node->address, node->port))
 	if (nr_found == 0) {
 		strcpy(context->error_str, "No such node");
-		rc = ENODEV;
+		rc = ISCSI_ERR_NO_OBJS_FOUND;
 	}
 	free(param->name);
 	free(param);
@@ -632,7 +631,7 @@ static int get_parameter_helper(void *data, node_rec_t *rec)
 	if (!info) {
 		snprintf(context->error_str, sizeof(context->error_str),
 			 strerror(ENOMEM));
-		return ENOMEM;
+		return ISCSI_ERR_NOMEM;
 	}
 
 	idbm_recinfo_node(rec, info);
@@ -652,10 +651,10 @@ static int get_parameter_helper(void *data, node_rec_t *rec)
 
 	if (i == MAX_KEYS) {
 		strcpy(context->error_str, "No such parameter");
-		return EINVAL;
+		return ISCSI_ERR_INVAL;
 	}
 
-	return 0;
+	return ISCSI_SUCCESS;
 }
 
 int libiscsi_node_get_parameter(struct libiscsi_context *context,
@@ -676,7 +675,7 @@ int libiscsi_node_get_parameter(struct libiscsi_context *context,
 		(char *)node->address, node->port))
 	if (nr_found == 0) {
 		strcpy(context->error_str, "No such node");
-		rc = ENODEV;
+		rc = ISCSI_ERR_NO_OBJS_FOUND;
 	}
 leave:
 	return rc;
@@ -708,7 +707,7 @@ int libiscsi_get_firmware_network_config(
 	memset(config, 0, sizeof *config);
 	memset(&fw_entry, 0, sizeof fw_entry);
 	if (fw_get_entry(&fw_entry))
-		return ENODEV;
+		return ISCSI_ERR_NO_OBJS_FOUND;
 
 	config->dhcp = strlen(fw_entry.dhcp) ? 1 : 0;
 	strlcpy(config->iface_name, fw_entry.iface, LIBISCSI_VALUE_MAXLEN);
@@ -718,7 +717,8 @@ int libiscsi_get_firmware_network_config(
 	strlcpy(config->gateway, fw_entry.gateway, LIBISCSI_VALUE_MAXLEN);
 	strlcpy(config->primary_dns, fw_entry.primary_dns, LIBISCSI_VALUE_MAXLEN);
 	strlcpy(config->secondary_dns, fw_entry.secondary_dns, LIBISCSI_VALUE_MAXLEN);
-	return 0;
+
+	return ISCSI_SUCCESS;
 }
 
 int libiscsi_get_firmware_initiator_name(char *initiatorname)
@@ -733,9 +733,9 @@ int libiscsi_get_firmware_initiator_name(char *initiatorname)
 	memset(initiatorname, 0, LIBISCSI_VALUE_MAXLEN);
 	memset(&fw_entry, 0, sizeof fw_entry);
 	if (fw_get_entry(&fw_entry))
-		return ENODEV;
+		return ISCSI_ERR_NO_OBJS_FOUND;
 
 	strlcpy(initiatorname, fw_entry.initiatorname, LIBISCSI_VALUE_MAXLEN);
 
-	return 0;
+	return ISCSI_SUCCESS;
 }
