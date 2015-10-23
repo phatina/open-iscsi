@@ -140,8 +140,8 @@ int libiscsi_discover_sendtargets(struct libiscsi_context *context,
 	drec.type = DISCOVERY_TYPE_SENDTARGETS;
 	strlcpy(drec.address, address, sizeof(drec.address));
 	drec.port = port ? port : ISCSI_LISTEN_PORT;
-	switch(auth_info ? auth_info->method : libiscsi_auth_none) {
-	case libiscsi_auth_chap:
+
+        if (auth_info && auth_info->method == libiscsi_auth_chap) {
 		drec.u.sendtargets.auth.authmethod = AUTH_METHOD_CHAP;
 		strlcpy(drec.u.sendtargets.auth.username,
 			auth_info->chap.username, AUTH_STR_MAX_LEN);
@@ -155,7 +155,6 @@ int libiscsi_discover_sendtargets(struct libiscsi_context *context,
 			auth_info->chap.reverse_password, AUTH_STR_MAX_LEN);
 		drec.u.sendtargets.auth.password_in_length =
 			strlen((char *)drec.u.sendtargets.auth.password_in);
-		break;
 	}
 
 	CHECK(idbm_add_discovery(&drec))
