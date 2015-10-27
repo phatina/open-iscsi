@@ -69,7 +69,7 @@ enum {
 
 	/* Always last. Indicates end of error code space */
 	ISCSI_MAX_ERR_VAL,
-} iscsi_err;
+};
 
 extern void iscsi_err_print_msg(int err);
 extern char *iscsi_err_to_str(int err);
