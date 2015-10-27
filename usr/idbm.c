@@ -2804,7 +2804,7 @@ idbm_slp_defaults(struct iscsi_slp_config *cfg)
 	       sizeof(struct iscsi_slp_config));
 }
 
-struct user_param *idbm_alloc_user_param(char *name, char *value)
+struct user_param *idbm_alloc_user_param(const char *name, const char *value)
 {
 	struct user_param *param;
 
